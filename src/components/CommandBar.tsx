@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSceneStore } from "@/store/sceneStore";
 import { ScenePatchSchema } from "@/lib/agent/patch";
+import { useBlenderSyncContext } from "./BlenderSyncProvider";
 
 /**
  * CommandBar — natural-language command input wired to the AI Scene Agent.
@@ -13,6 +14,7 @@ import { ScenePatchSchema } from "@/lib/agent/patch";
 export function CommandBar() {
   const scene = useSceneStore((s) => s.scene);
   const applyAgentPatch = useSceneStore((s) => s.applyAgentPatch);
+  const blender = useBlenderSyncContext();
 
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
@@ -101,13 +103,29 @@ export function CommandBar() {
           </button>
           <button
             type="button"
-            disabled
-            title="Available after Blender sync is built (Spec 4)"
+            onClick={() => blender.sync(scene)}
+            disabled={blender.status !== "paired" || blender.syncStatus === "syncing"}
+            title={
+              blender.status === "paired"
+                ? "Send the current scene to Blender"
+                : "Connect Blender first (top-right)"
+            }
             className="rounded-md border border-edge px-4 py-2 text-sm text-neutral-300 disabled:opacity-50"
           >
-            Sync to Blender
+            {blender.syncStatus === "syncing" ? "Syncing…" : "Sync to Blender"}
           </button>
         </div>
+
+        {blender.syncMessage && (
+          <p
+            data-testid="sync-message"
+            className={`text-xs ${
+              blender.syncStatus === "failed" ? "text-red-300" : "text-neutral-400"
+            }`}
+          >
+            {blender.syncMessage}
+          </p>
+        )}
 
         {notice && (
           <p data-testid="command-notice" className="text-xs text-neutral-400">

@@ -2,9 +2,18 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CommandBar } from "./CommandBar";
+import { BlenderSyncProvider } from "./BlenderSyncProvider";
 import { useSceneStore } from "@/store/sceneStore";
 import { createEmptyScene } from "@/lib/scene/factory";
 import { byType } from "@/lib/scene/resolve";
+
+function renderBar() {
+  return render(
+    <BlenderSyncProvider>
+      <CommandBar />
+    </BlenderSyncProvider>,
+  );
+}
 
 beforeEach(() => {
   useSceneStore.setState({ scene: createEmptyScene(), status: "idle", error: null });
@@ -24,7 +33,7 @@ describe("CommandBar", () => {
     const user = userEvent.setup();
     mockAgentResponse({ patch: { operations: [{ op: "create", object: { type: "desk" } }] } });
 
-    render(<CommandBar />);
+    renderBar();
     await user.type(screen.getByLabelText(/describe or modify/i), "add a desk");
     await user.click(screen.getByRole("button", { name: /send/i }));
 
@@ -38,7 +47,7 @@ describe("CommandBar", () => {
     const user = userEvent.setup();
     mockAgentResponse({ error: "AI is not configured." }, false, 503);
 
-    render(<CommandBar />);
+    renderBar();
     await user.type(screen.getByLabelText(/describe or modify/i), "add a desk");
     await user.click(screen.getByRole("button", { name: /send/i }));
 
@@ -53,7 +62,7 @@ describe("CommandBar", () => {
     useSceneStore.getState().addObject("monitor");
     mockAgentResponse({ patch: { operations: [], clarification: "Which monitor?" } });
 
-    render(<CommandBar />);
+    renderBar();
     await user.type(screen.getByLabelText(/describe or modify/i), "move it");
     await user.click(screen.getByRole("button", { name: /send/i }));
 
@@ -63,3 +72,4 @@ describe("CommandBar", () => {
     expect(byType(useSceneStore.getState().scene, "monitor")).toHaveLength(2);
   });
 });
+

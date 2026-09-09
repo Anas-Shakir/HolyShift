@@ -1,0 +1,18 @@
+{
+  "name": "holyshift-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WebSocket relay pairing the HolyShift web app with a user's local Blender by code.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "8.18.0"
+  }
+}

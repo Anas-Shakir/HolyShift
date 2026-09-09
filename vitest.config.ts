@@ -9,6 +9,10 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    env: {
+      // Enable the Blender-sync code paths in tests (real value provided at deploy time).
+      NEXT_PUBLIC_RELAY_URL: "ws://localhost:8787",
+    },
   },
   resolve: {
     alias: {
