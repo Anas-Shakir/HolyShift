@@ -80,8 +80,9 @@ def test_primitives():
             obj = objs[0]
             check(obj.type == "MESH", "%s is a MESH" % t)
             check(len(obj.data.vertices) > 0, "%s has geometry" % t)
-            check(tuple(round(v, 3) for v in obj.location) == (1.0, 2.0, 3.0),
-                  "%s transform applied" % t)
+            # Position [1,2,3] in the web's Y-up frame maps to (1, -3, 2) in Blender Z-up.
+            check(tuple(round(v, 3) for v in obj.location) == (1.0, -3.0, 2.0),
+                  "%s transform applied (Y-up -> Z-up)" % t)
             check(len(obj.data.materials) == 1, "%s has a material" % t)
 
 
@@ -126,6 +127,27 @@ def test_lights_camera_environment():
     check(bpy.context.scene.world is not None, "world/environment set")
 
 
+def test_up_axis():
+    print("test_up_axis")
+    reset_blend()
+    # A tall, thin box: height (Y in web) should become the Z extent in Blender.
+    spec = base_object("cube", "cube_01", dims=(0.2, 2.0, 0.2))
+    spec["transform"] = {"position": [0, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1]}
+    compiler.compile_scene(scene_with([spec]))
+    objs = objects_by_tag("cube_01")
+    check(bool(objs), "up-axis object created")
+    if objs:
+        # world-space bounding box: Z extent should dominate (object stands up).
+        obj = objs[0]
+        bpy.context.view_layer.update()  # refresh matrix_world after transform
+        corners = [obj.matrix_world @ __import__("mathutils").Vector(c) for c in obj.bound_box]
+        zs = [c.z for c in corners]
+        ys = [c.y for c in corners]
+        z_ext = max(zs) - min(zs)
+        y_ext = max(ys) - min(ys)
+        check(z_ext > y_ext, "tall object stands up along Z (z_ext=%.2f > y_ext=%.2f)" % (z_ext, y_ext))
+
+
 def test_resync_replaces_not_duplicates():
     print("test_resync_replaces_not_duplicates")
     reset_blend()
@@ -140,6 +162,7 @@ def main():
     test_composed()
     test_material_emissive_and_alpha()
     test_lights_camera_environment()
+    test_up_axis()
     test_resync_replaces_not_duplicates()
 
     print("")

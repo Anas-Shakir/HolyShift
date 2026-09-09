@@ -53,6 +53,14 @@ export function useBlenderSync(): BlenderSyncState {
 
   const wsRef = useRef<WebSocket | null>(null);
   const pendingSync = useRef<boolean>(false);
+  const syncTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearSyncTimeout = () => {
+    if (syncTimeout.current) {
+      clearTimeout(syncTimeout.current);
+      syncTimeout.current = null;
+    }
+  };
 
   const configured = RELAY_URL.length > 0;
 
@@ -107,10 +115,18 @@ export function useBlenderSync(): BlenderSyncState {
             break;
           case "peer_left":
             setStatus("waiting_for_blender");
+            // If Blender drops mid-sync, don't hang on "syncing".
+            if (pendingSync.current) {
+              pendingSync.current = false;
+              clearSyncTimeout();
+              setSyncStatus("failed");
+              setSyncMessage("Blender disconnected before the sync completed.");
+            }
             break;
           case "sync_result": {
             const r = msg as SyncResultMessage;
             pendingSync.current = false;
+            clearSyncTimeout();
             setSyncStatus(r.ok ? "success" : "failed");
             setSyncMessage(r.ok ? r.summary ?? "Synced." : r.error ?? "Sync failed.");
             break;
@@ -152,6 +168,16 @@ export function useBlenderSync(): BlenderSyncState {
     setSyncStatus("syncing");
     setSyncMessage(null);
     ws.send(serializeMessage({ type: "sync", scene }));
+
+    // Fail gracefully if Blender never responds (drop, sleep, or compile hang).
+    clearSyncTimeout();
+    syncTimeout.current = setTimeout(() => {
+      if (pendingSync.current) {
+        pendingSync.current = false;
+        setSyncStatus("failed");
+        setSyncMessage("No response from Blender (timed out). Check the add-on is connected.");
+      }
+    }, 20000);
   }, []);
 
   // Clean up the socket on unmount.

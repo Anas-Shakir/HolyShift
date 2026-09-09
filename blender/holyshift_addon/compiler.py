@@ -135,13 +135,33 @@ def _hex_to_rgb(hex_color):
     return (r, g, b)
 
 
+# The web preview (Three.js) is Y-up; Blender is Z-up. A point [x, y, z] in the web's
+# Y-up frame maps to [x, -z, y] in Blender's Z-up frame. We convert the object's world
+# position with this mapping and stand its (Y-up-built) geometry up with a +90° X rotation,
+# composing the user's requested rotation on top.
+_YUP_TO_ZUP_X = math.pi / 2.0
+
+
+def _yup_to_zup_position(pos):
+    """Map a Y-up position [x, y, z] to Blender's Z-up frame [x, -z, y]."""
+    return (pos[0], -pos[2], pos[1])
+
+
 def _apply_transform(obj, transform):
     pos = transform.get("position", [0, 0, 0])
     rot = transform.get("rotation", [0, 0, 0])
     scl = transform.get("scale", [1, 1, 1])
-    obj.location = (pos[0], pos[1], pos[2])
-    obj.rotation_euler = (rot[0], rot[1], rot[2])
-    obj.scale = (scl[0], scl[1], scl[2])
+    # Position: Y-up -> Z-up.
+    obj.location = _yup_to_zup_position(pos)
+    # Rotation: stand the Y-up geometry up (+90° about X), then apply the requested
+    # Euler rotation expressed in the same converted frame (x, -z, y).
+    obj.rotation_euler = (
+        _YUP_TO_ZUP_X + rot[0],
+        -rot[2],
+        rot[1],
+    )
+    # Scale maps component-wise under the axis swap (|-z| == z).
+    obj.scale = (scl[0], scl[2], scl[1])
 
 
 # ---------------------------------------------------------------------------

@@ -31,12 +31,14 @@ class HolyShiftClient:
         self._ws = None
         self._thread = None
         self._inbox = queue.Queue()   # relay -> main thread (parsed dicts)
-        self._outbox = queue.Queue()  # main thread -> relay (dicts to send)
         self._connected = False
         self._paired = False
         self._status = "disconnected"
         self._error = None
         self._should_run = False
+        # All sends go through this lock so we never send concurrently with the
+        # library's internal ping frames (websocket-client is not send-safe otherwise).
+        self._send_lock = threading.Lock()
 
     # ---- state (read from the main thread / panel) ----
     @property
@@ -73,14 +75,27 @@ class HolyShiftClient:
         self._status = "disconnected"
         self._paired = False
 
+    def _safe_send(self, obj):
+        """Send a JSON message under the lock. Returns True on success."""
+        ws = self._ws
+        if ws is None:
+            return False
+        try:
+            with self._send_lock:
+                ws.send(json.dumps(obj))
+            return True
+        except Exception:  # noqa: BLE001 - connection may be mid-close
+            return False
+
     # ---- socket thread ----
     def _run(self):
         def on_open(ws):
             self._connected = True
             self._status = "waiting_for_blender"
-            ws.send(json.dumps({"type": "hello", "role": "blender", "code": self.code}))
+            # Re-announce on every (re)connect so pairing re-establishes automatically.
+            self._safe_send({"type": "hello", "role": "blender", "code": self.code})
 
-        def on_message(ws, message):
+        def on_message(ws, message):  # noqa: ARG001
             try:
                 data = json.loads(message)
             except (ValueError, TypeError):
@@ -93,19 +108,25 @@ class HolyShiftClient:
                 self._paired = False
                 self._status = "waiting_for_blender"
             elif mtype == "ping":
-                self._outbox.put({"type": "pong"})
-            # Hand everything to the main thread (it decides what to act on).
+                # Reply immediately on this thread, under the lock.
+                self._safe_send({"type": "pong"})
+                return
+            elif mtype == "pong":
+                return
+            # Hand everything else to the main thread (it decides what to act on).
             self._inbox.put(data)
 
         def on_error(ws, err):  # noqa: ARG001
             self._error = str(err)
-            self._status = "error"
+            # Do not force "error" permanently; reconnect may recover it.
+            if self._status != "paired":
+                self._status = "connecting"
 
         def on_close(ws, *args):  # noqa: ARG001
             self._connected = False
             self._paired = False
             if self._should_run:
-                self._status = "disconnected"
+                self._status = "connecting"
 
         self._ws = websocket.WebSocketApp(
             self.url,
@@ -115,23 +136,19 @@ class HolyShiftClient:
             on_close=on_close,
         )
 
-        # Flush outbound queue on a helper thread so run_forever isn't blocked.
-        def pump_outbox():
-            while self._should_run:
-                try:
-                    msg = self._outbox.get(timeout=0.25)
-                except queue.Empty:
-                    continue
-                try:
-                    if self._ws is not None:
-                        self._ws.send(json.dumps(msg))
-                except Exception:  # noqa: BLE001
-                    pass
+        # run_forever manages its own ping loop AND auto-reconnects on drop. All our sends
+        # go through _safe_send (locked), so they never collide with library ping frames.
+        while self._should_run:
+            try:
+                self._ws.run_forever(ping_interval=20, ping_timeout=10, reconnect=3)
+            except Exception as exc:  # noqa: BLE001
+                self._error = str(exc)
+            if not self._should_run:
+                break
+            # Brief backoff before reconnecting.
+            import time
 
-        threading.Thread(target=pump_outbox, name="holyshift-outbox", daemon=True).start()
-
-        # Blocks until close; ping_interval keeps the relay connection warm.
-        self._ws.run_forever(ping_interval=20, ping_timeout=10)
+            time.sleep(2)
 
     # ---- main-thread API (called by the timer) ----
     def drain_inbox(self):
@@ -145,5 +162,5 @@ class HolyShiftClient:
         return items
 
     def send(self, message):
-        """Queue an outbound message (safe from the main thread)."""
-        self._outbox.put(message)
+        """Send an outbound message (safe to call from the main thread; locked internally)."""
+        return self._safe_send(message)
