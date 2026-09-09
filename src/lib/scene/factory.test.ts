@@ -1,0 +1,45 @@
+import { describe, it, expect } from "vitest";
+import { createEmptyScene, createDefaultObject } from "./factory";
+import { SceneSchema, SceneObjectSchema, OBJECT_TYPES, SCHEMA_VERSION } from "./schema";
+
+describe("createEmptyScene", () => {
+  it("produces a schema-valid empty scene", () => {
+    const scene = createEmptyScene();
+    expect(SceneSchema.safeParse(scene).success).toBe(true);
+    expect(scene.objects).toHaveLength(0);
+    expect(scene.metadata.version).toBe(SCHEMA_VERSION);
+  });
+
+  it("uses the provided name", () => {
+    expect(createEmptyScene("Cyberpunk").metadata.name).toBe("Cyberpunk");
+  });
+});
+
+describe("createDefaultObject", () => {
+  it("produces a schema-valid object for every supported type", () => {
+    for (const type of OBJECT_TYPES) {
+      const obj = createDefaultObject(type);
+      const result = SceneObjectSchema.safeParse(obj);
+      expect(result.success, `type ${type} should be valid`).toBe(true);
+      expect(obj.type).toBe(type);
+      expect(obj.id.startsWith(`${type}_`)).toBe(true);
+    }
+  });
+
+  it("assigns collision-safe ids given existing ids", () => {
+    const a = createDefaultObject("monitor");
+    const b = createDefaultObject("monitor", [a.id]);
+    expect(a.id).toBe("monitor_01");
+    expect(b.id).toBe("monitor_02");
+  });
+
+  it("applies overrides while staying valid", () => {
+    const obj = createDefaultObject("cube", [], {
+      name: "Red Box",
+      material: { color: "#ff0000", metalness: 0, roughness: 0.4, opacity: 1, emissiveIntensity: 0 },
+    });
+    expect(obj.name).toBe("Red Box");
+    expect(obj.material.color).toBe("#ff0000");
+    expect(SceneObjectSchema.safeParse(obj).success).toBe(true);
+  });
+});
