@@ -25,8 +25,12 @@ except ImportError:  # allows syntax import outside Blender (e.g. linters)
     mathutils = None
 
 TAG = "holyshift_id"
-PRIMITIVES = {"cube", "sphere", "cylinder", "plane"}
-COMPOSED = {"chair", "desk", "table", "monitor", "pc", "lamp"}
+PRIMITIVES = {"cube", "sphere", "cylinder", "plane", "cone", "torus", "prism"}
+COMPOSED = {
+    "chair", "desk", "table", "monitor", "pc", "lamp",
+    "plant", "bookshelf", "sofa", "bed", "rug", "window", "door",
+    "mug", "bottle", "stool", "streetlight",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -88,11 +92,79 @@ def _plane_bm(dimensions):
     return bm
 
 
+def _cone_bm(dimensions):
+    bm = bmesh.new()
+    radius = max(dimensions[0], dimensions[2]) / 2.0
+    depth = dimensions[1]
+    # radius2=0 => a point at one end (cone). cap_ends closes the base.
+    bmesh.ops.create_cone(
+        bm,
+        cap_ends=True,
+        cap_tris=False,
+        segments=32,
+        radius1=radius,
+        radius2=0.0,
+        depth=depth,
+    )
+    return bm
+
+
+def _prism_bm(dimensions):
+    bm = bmesh.new()
+    radius = max(dimensions[0], dimensions[2]) / 2.0
+    depth = dimensions[1]
+    # 3 segments => triangular prism.
+    bmesh.ops.create_cone(
+        bm,
+        cap_ends=True,
+        cap_tris=False,
+        segments=3,
+        radius1=radius,
+        radius2=radius,
+        depth=depth,
+    )
+    return bm
+
+
+def _torus_bm(dimensions):
+    """
+    Build a torus by spinning a small circle (minor radius) around the object's up axis.
+    major radius from x/z; minor (tube) radius from height. Uses bmesh spin — no bpy.ops.
+    """
+    import math
+
+    bm = bmesh.new()
+    major = max(dimensions[0], dimensions[2]) / 2.0
+    minor = max(dimensions[1] / 2.0, major * 0.25)
+    # Create the cross-section circle in the XZ plane, offset by the major radius along X.
+    ret = bmesh.ops.create_circle(bm, cap_ends=False, segments=16, radius=minor)
+    verts = [v for v in ret["verts"]]
+    # move the circle out to the major radius and orient it to face tangentially
+    rot = mathutils.Matrix.Rotation(math.radians(90.0), 3, "X")
+    for v in verts:
+        v.co = rot @ v.co
+        v.co.x += major
+    # spin the profile around Y (the up axis before the object's +90° X stand-up)
+    bmesh.ops.spin(
+        bm,
+        geom=verts + [e for e in bm.edges],
+        cent=(0, 0, 0),
+        axis=(0, 1, 0),
+        angle=math.radians(360.0),
+        steps=32,
+        use_merge=True,
+    )
+    return bm
+
+
 _PRIMITIVE_BUILDERS = {
     "cube": _cube_bm,
     "sphere": _sphere_bm,
     "cylinder": _cylinder_bm,
     "plane": _plane_bm,
+    "cone": _cone_bm,
+    "prism": _prism_bm,
+    "torus": _torus_bm,
 }
 
 
@@ -223,6 +295,74 @@ def _composed_parts(obj_type, dims, material):
         parts.append(("base", (w, base_t, d), (0, base_t / 2, 0)))
         parts.append(("stem", (stem_t, stem_h, stem_t), (0, base_t + stem_h / 2, 0)))
         parts.append(("shade", (w, shade_h, d), (0, base_t + stem_h + shade_h / 2, 0)))
+    elif obj_type == "plant":
+        pot_h = h * 0.3
+        pot_w = min(w, d) * 0.7
+        foliage = min(w, d)
+        parts.append(("pot", (pot_w, pot_h, pot_w), (0, pot_h / 2, 0)))
+        parts.append(("foliage", (foliage, h - pot_h, foliage), (0, pot_h + (h - pot_h) / 2, 0)))
+    elif obj_type == "bookshelf":
+        t = min(w, h) * 0.05
+        parts.append(("left", (t, h, d), (-w / 2 + t / 2, h / 2, 0)))
+        parts.append(("right", (t, h, d), (w / 2 - t / 2, h / 2, 0)))
+        for i in range(5):
+            y = min((h / 4) * i, h - t / 2)
+            parts.append((f"shelf{i}", (w, t, d), (0, y + t / 2, 0)))
+    elif obj_type == "sofa":
+        seat_h = h * 0.45
+        back_h = h - seat_h
+        arm_w = w * 0.12
+        parts.append(("base", (w, seat_h, d), (0, seat_h / 2, 0)))
+        parts.append(("back", (w, back_h, d * 0.2), (0, seat_h + back_h / 2, -d / 2 + d * 0.1)))
+        parts.append(("arm_l", (arm_w, back_h, d), (-w / 2 + arm_w / 2, seat_h + back_h / 2, 0)))
+        parts.append(("arm_r", (arm_w, back_h, d), (w / 2 - arm_w / 2, seat_h + back_h / 2, 0)))
+    elif obj_type == "bed":
+        base_h = h * 0.5
+        matt_h = h * 0.35
+        pillow_h = h * 0.15
+        parts.append(("base", (w, base_h, d), (0, base_h / 2, 0)))
+        parts.append(("mattress", (w * 0.96, matt_h, d * 0.98), (0, base_h + matt_h / 2, 0)))
+        parts.append(("pillow", (w * 0.8, pillow_h, d * 0.2), (0, base_h + matt_h + pillow_h / 2, -d / 2 + d * 0.14)))
+    elif obj_type == "rug":
+        t = max(h, 0.02)
+        parts.append(("rug", (w, t, d), (0, t / 2, 0)))
+    elif obj_type == "window":
+        f = min(w, h) * 0.08
+        parts.append(("top", (w, f, d), (0, h - f / 2, 0)))
+        parts.append(("bottom", (w, f, d), (0, f / 2, 0)))
+        parts.append(("left", (f, h, d), (-w / 2 + f / 2, h / 2, 0)))
+        parts.append(("right", (f, h, d), (w / 2 - f / 2, h / 2, 0)))
+        parts.append(("glass", (w - 2 * f, h - 2 * f, d * 0.3), (0, h / 2, 0)))
+    elif obj_type == "door":
+        parts.append(("slab", (w, h, d), (0, h / 2, 0)))
+        knob = min(w, h) * 0.06
+        parts.append(("knob", (knob, knob, knob), (w / 2 - w * 0.15, h * 0.5, d)))
+    elif obj_type == "mug":
+        r = min(w, d)
+        parts.append(("body", (r, h, r), (0, h / 2, 0)))
+    elif obj_type == "bottle":
+        r = min(w, d)
+        body_h = h * 0.7
+        neck_h = h * 0.3
+        parts.append(("body", (r, body_h, r), (0, body_h / 2, 0)))
+        parts.append(("neck", (r * 0.4, neck_h, r * 0.4), (0, body_h + neck_h / 2, 0)))
+    elif obj_type == "stool":
+        seat_t = h * 0.12
+        leg_t = min(w, d) * 0.1
+        leg_h = h - seat_t
+        parts.append(("seat", (min(w, d), seat_t, min(w, d)), (0, h - seat_t / 2, 0)))
+        for sx in (-1, 1):
+            for sz in (-1, 1):
+                parts.append(
+                    ("leg", (leg_t, leg_h, leg_t),
+                     (sx * (w / 2 - leg_t), leg_h / 2, sz * (d / 2 - leg_t)))
+                )
+    elif obj_type == "streetlight":
+        pole_w = min(w, d) * 0.8
+        arm_len = w * 1.5
+        parts.append(("pole", (pole_w, h, pole_w), (0, h / 2, 0)))
+        parts.append(("arm", (arm_len, pole_w, pole_w), (arm_len / 2 - pole_w, h - pole_w, 0)))
+        parts.append(("lamp", (pole_w * 3, pole_w * 3, pole_w * 3), (arm_len - pole_w, h - pole_w, 0)))
     return parts
 
 
@@ -260,7 +400,32 @@ def _build_composed(spec):
     return parent
 
 
+def _build_group(spec):
+    """A group = an Empty parent + one primitive object per child, parented to it."""
+    hid = spec["id"]
+    parent = bpy.data.objects.new(spec.get("name", "group"), None)  # Empty
+    parent[TAG] = hid
+    bpy.context.collection.objects.link(parent)
+    _apply_transform(parent, spec["transform"])
+
+    for i, child in enumerate(spec.get("children", [])):
+        ctype = child.get("type", "cube")
+        builder = _PRIMITIVE_BUILDERS.get(ctype, _cube_bm)
+        bm = builder(child["dimensions"])
+        cobj = _new_mesh_object(f"{hid}_child_{i}", bm, hid)
+        # child position/rotation are LOCAL (relative to the group origin), in Y-up.
+        pos = child.get("position", [0, 0, 0])
+        cobj.location = (pos[0], pos[1], pos[2])
+        crot = child.get("rotation", [0, 0, 0])
+        cobj.rotation_euler = (crot[0], crot[1], crot[2])
+        _assign_material(cobj, _make_material(f"{hid}_child_{i}_mat", child["material"], hid))
+        cobj.parent = parent
+    return parent
+
+
 def _build_object(spec):
+    if spec["type"] == "group":
+        return _build_group(spec)
     if spec["type"] in PRIMITIVES:
         return _build_primitive(spec)
     if spec["type"] in COMPOSED:

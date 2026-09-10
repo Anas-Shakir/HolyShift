@@ -131,4 +131,49 @@ describe("OBJECT_TYPES", () => {
   it("includes the core primitives", () => {
     expect(OBJECT_TYPES).toEqual(expect.arrayContaining(["cube", "sphere", "cylinder", "plane"]));
   });
+  it("includes the new primitives and seeded composed types", () => {
+    expect(OBJECT_TYPES).toEqual(
+      expect.arrayContaining(["cone", "torus", "prism", "group", "plant", "bookshelf", "sofa"]),
+    );
+  });
+});
+
+describe("group objects", () => {
+  const groupChild = {
+    type: "cylinder",
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    dimensions: [0.3, 0.4, 0.3],
+    material: { color: "#8b5a2b", metalness: 0, roughness: 0.8, opacity: 1, emissiveIntensity: 0 },
+  };
+
+  function groupObject(children: unknown[]) {
+    return {
+      id: "group_01",
+      type: "group",
+      name: "Plant",
+      transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+      dimensions: [1, 1, 1],
+      material: validObject.material,
+      children,
+    };
+  }
+
+  it("accepts a group with primitive children", () => {
+    expect(SceneObjectSchema.safeParse(groupObject([groupChild])).success).toBe(true);
+  });
+
+  it("rejects a group with no children", () => {
+    expect(SceneObjectSchema.safeParse(groupObject([])).success).toBe(false);
+  });
+
+  it("rejects a group child that is a composed type", () => {
+    const bad = { ...groupChild, type: "chair" };
+    expect(SceneObjectSchema.safeParse(groupObject([bad])).success).toBe(false);
+  });
+
+  it("rejects children on a non-group object", () => {
+    const bad = { ...validObject, children: [groupChild] };
+    expect(SceneObjectSchema.safeParse(bad).success).toBe(false);
+  });
 });

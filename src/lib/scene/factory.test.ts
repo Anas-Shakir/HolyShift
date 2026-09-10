@@ -42,4 +42,27 @@ describe("createDefaultObject", () => {
     expect(obj.material.color).toBe("#ff0000");
     expect(SceneObjectSchema.safeParse(obj).success).toBe(true);
   });
+
+  it("creates a valid group with default children", () => {
+    const g = createDefaultObject("group");
+    expect(g.type).toBe("group");
+    expect(g.children && g.children.length).toBeGreaterThan(0);
+    expect(SceneObjectSchema.safeParse(g).success).toBe(true);
+  });
+
+  it("creates a group with supplied children", () => {
+    const children = [
+      {
+        type: "cone" as const,
+        position: [0, 1, 0] as [number, number, number],
+        rotation: [0, 0, 0] as [number, number, number],
+        dimensions: [0.4, 0.6, 0.4] as [number, number, number],
+        material: { color: "#3f7d3a", metalness: 0, roughness: 0.7, opacity: 1, emissiveIntensity: 0 },
+      },
+    ];
+    const g = createDefaultObject("group", [], { name: "Pine", children });
+    expect(g.children).toHaveLength(1);
+    expect(g.children?.[0].type).toBe("cone");
+    expect(SceneObjectSchema.safeParse(g).success).toBe(true);
+  });
 });

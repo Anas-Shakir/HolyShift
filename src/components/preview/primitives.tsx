@@ -1,7 +1,16 @@
 "use client";
 
 import type { SceneObject } from "@/lib/scene/schema";
-import { toMaterialProps, boxArgs, sphereRadius, cylinderArgs, planeArgs } from "./mapping";
+import {
+  toMaterialProps,
+  boxArgs,
+  sphereRadius,
+  cylinderArgs,
+  planeArgs,
+  coneArgs,
+  torusArgs,
+  prismArgs,
+} from "./mapping";
 
 /**
  * Single-mesh renderers for the core primitive types.
@@ -55,6 +64,36 @@ export function PlaneMesh({ object }: { object: SceneObject }) {
   return (
     <mesh receiveShadow>
       <boxGeometry args={planeArgs(object.dimensions)} />
+      <StandardMaterial object={object} />
+    </mesh>
+  );
+}
+
+export function ConeMesh({ object }: { object: SceneObject }) {
+  return (
+    <mesh castShadow receiveShadow>
+      <coneGeometry args={coneArgs(object.dimensions)} />
+      <StandardMaterial object={object} />
+    </mesh>
+  );
+}
+
+export function TorusMesh({ object }: { object: SceneObject }) {
+  // Lay the torus flat (ring parallel to the ground) by rotating about X.
+  return (
+    <mesh castShadow receiveShadow rotation={[Math.PI / 2, 0, 0]}>
+      <torusGeometry args={torusArgs(object.dimensions)} />
+      <StandardMaterial object={object} />
+    </mesh>
+  );
+}
+
+export function PrismMesh({ object }: { object: SceneObject }) {
+  // A triangular prism = 3-sided cylinder: [radiusTop, radiusBottom, height, radialSegments].
+  const [radius, height, segments] = prismArgs(object.dimensions);
+  return (
+    <mesh castShadow receiveShadow>
+      <cylinderGeometry args={[radius, radius, height, segments]} />
       <StandardMaterial object={object} />
     </mesh>
   );

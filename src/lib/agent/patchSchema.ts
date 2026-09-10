@@ -43,6 +43,20 @@ const target = {
   required: ["id", "type", "ordinal"],
 } as const;
 
+// A group child for structured output: a primitive with local transform + material.
+const createChild = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    type: { type: "string" },
+    position: vec3,
+    rotation: { anyOf: [vec3, { type: "null" }] },
+    dimensions: vec3,
+    material: { anyOf: [materialPatch, { type: "null" }] },
+  },
+  required: ["type", "position", "rotation", "dimensions", "material"],
+} as const;
+
 const createObject = {
   type: "object",
   additionalProperties: false,
@@ -54,8 +68,9 @@ const createObject = {
     scale: { anyOf: [vec3, { type: "null" }] },
     dimensions: { anyOf: [vec3, { type: "null" }] },
     material: { anyOf: [materialPatch, { type: "null" }] },
+    children: { anyOf: [{ type: "array", items: createChild }, { type: "null" }] },
   },
-  required: ["type", "name", "position", "rotation", "scale", "dimensions", "material"],
+  required: ["type", "name", "position", "rotation", "scale", "dimensions", "material", "children"],
 } as const;
 
 const updateChanges = {

@@ -86,6 +86,55 @@ def test_primitives():
             check(len(obj.data.materials) == 1, "%s has a material" % t)
 
 
+def test_new_primitives():
+    print("test_new_primitives")
+    for t in ["cone", "torus", "prism"]:
+        reset_blend()
+        result = compiler.compile_scene(scene_with([base_object(t, t + "_01")]))
+        check(result["ok"], "%s compiled ok (%s)" % (t, result))
+        objs = objects_by_tag(t + "_01")
+        check(len(objs) == 1 and objs[0].type == "MESH", "%s is a single MESH" % t)
+        if objs:
+            check(len(objs[0].data.vertices) > 0, "%s has geometry" % t)
+
+
+def test_group():
+    print("test_group")
+    reset_blend()
+    spec = {
+        "id": "group_01",
+        "type": "group",
+        "name": "Plant",
+        "transform": {"position": [0, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+        "dimensions": [1, 1, 1],
+        "material": {"color": "#ffffff", "metalness": 0, "roughness": 0.5, "opacity": 1, "emissiveIntensity": 0},
+        "children": [
+            {"type": "cylinder", "position": [0, 0.15, 0], "rotation": [0, 0, 0], "dimensions": [0.3, 0.3, 0.3],
+             "material": {"color": "#8b5a2b", "metalness": 0, "roughness": 0.8, "opacity": 1, "emissiveIntensity": 0}},
+            {"type": "sphere", "position": [0, 0.6, 0], "rotation": [0, 0, 0], "dimensions": [0.5, 0.5, 0.5],
+             "material": {"color": "#3f7d3a", "metalness": 0, "roughness": 0.7, "opacity": 1, "emissiveIntensity": 0}},
+        ],
+    }
+    result = compiler.compile_scene(scene_with([spec]))
+    check(result["ok"], "group compiled ok (%s)" % result)
+    tagged = objects_by_tag("group_01")
+    parents = [o for o in tagged if o.type == "EMPTY"]
+    meshes = [o for o in tagged if o.type == "MESH"]
+    check(len(parents) == 1, "group has one empty parent")
+    check(len(meshes) == 2, "group has 2 child meshes")
+    check(all(m.parent == parents[0] for m in meshes), "group children parented to empty")
+
+
+def test_seeded_composed():
+    print("test_seeded_composed")
+    for t in ["plant", "bookshelf", "sofa", "bed", "rug", "window", "door", "mug", "bottle", "stool", "streetlight"]:
+        reset_blend()
+        result = compiler.compile_scene(scene_with([base_object(t, t + "_01")]))
+        check(result["ok"], "%s compiled ok (%s)" % (t, result))
+        tagged = objects_by_tag(t + "_01")
+        check(len(tagged) >= 1, "%s created objects" % t)
+
+
 def test_composed():
     print("test_composed")
     for t in ["chair", "desk", "table", "monitor", "pc", "lamp"]:
@@ -159,6 +208,9 @@ def test_resync_replaces_not_duplicates():
 
 def main():
     test_primitives()
+    test_new_primitives()
+    test_group()
+    test_seeded_composed()
     test_composed()
     test_material_emissive_and_alpha()
     test_lights_camera_environment()

@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { ObjectTypeSchema, LightTypeSchema, Vec3Schema, HexColorSchema } from "@/lib/scene/schema";
+import {
+  ObjectTypeSchema,
+  LightTypeSchema,
+  Vec3Schema,
+  HexColorSchema,
+  PrimitiveTypeSchema,
+} from "@/lib/scene/schema";
 
 /**
  * ScenePatch — the machine-readable output contract for the AI Scene Agent.
@@ -30,6 +36,17 @@ export const MaterialPatchSchema = z
   })
   .strict();
 
+/** A group child the AI may specify when creating a `group` object. */
+export const CreateChildSchema = z
+  .object({
+    type: PrimitiveTypeSchema,
+    position: Vec3Schema,
+    rotation: Vec3Schema.optional(),
+    dimensions: Vec3Schema,
+    material: MaterialPatchSchema.optional(),
+  })
+  .strict();
+
 /** Fields the AI may set when creating an object. */
 export const CreateObjectSchema = z
   .object({
@@ -40,6 +57,8 @@ export const CreateObjectSchema = z
     scale: Vec3Schema.optional(),
     dimensions: Vec3Schema.optional(),
     material: MaterialPatchSchema.optional(),
+    /** For type "group": the primitive children to assemble. */
+    children: z.array(CreateChildSchema).optional(),
   })
   .strict();
 

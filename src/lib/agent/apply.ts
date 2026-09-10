@@ -69,12 +69,40 @@ function toObjectPatch(fields: {
   };
 }
 
+/** Fill a full material from a partial one (AI children carry partial material). */
+function fullChildMaterial(partial?: Record<string, unknown>) {
+  return {
+    color: (partial?.color as string) ?? "#b8bec9",
+    metalness: (partial?.metalness as number) ?? 0,
+    roughness: (partial?.roughness as number) ?? 0.6,
+    opacity: (partial?.opacity as number) ?? 1,
+    emissiveIntensity: (partial?.emissiveIntensity as number) ?? 0,
+  };
+}
+
+/** Convert AI-supplied group children into full GroupChild objects for the factory. */
+function toGroupChildren(children: ReadonlyArray<Record<string, unknown>>) {
+  return children.map((c) => ({
+    type: c.type,
+    position: c.position ?? [0, 0, 0],
+    rotation: c.rotation ?? [0, 0, 0],
+    dimensions: c.dimensions ?? [1, 1, 1],
+    material: fullChildMaterial(c.material as Record<string, unknown> | undefined),
+  }));
+}
+
 function applyOne(scene: Scene, op: Operation): { scene: Scene; message: string } {
   switch (op.op) {
     case "create": {
-      const { type, ...fields } = op.object;
+      const { type, children, ...fields } = op.object as typeof op.object & {
+        children?: Record<string, unknown>[];
+      };
+      const overrides = toObjectPatch(fields) as Record<string, unknown>;
+      if (type === "group" && Array.isArray(children)) {
+        overrides.children = toGroupChildren(children);
+      }
       return {
-        scene: addObject(scene, type, toObjectPatch(fields) as never),
+        scene: addObject(scene, type, overrides as never),
         message: `Created ${op.object.name ?? type}`,
       };
     }

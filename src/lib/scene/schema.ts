@@ -29,23 +29,56 @@ export const HexColorSchema = z
 export type HexColor = z.infer<typeof HexColorSchema>;
 
 /**
- * Supported object types (closed set = capability manifest seed).
- * - Core primitives: cube, sphere, cylinder, plane.
- * - Composed objects: represented as groups of primitives by the renderer/compiler.
+ * Base primitive types. These are the shapes the renderer/compiler can draw directly, and
+ * the only types a `group`'s children may use. Groups let the AI compose novel objects out
+ * of these without any new geometry (Spec 5 — Scene Vocabulary Expansion).
  */
-export const ObjectTypeSchema = z.enum([
-  // core primitives
+export const PrimitiveTypeSchema = z.enum([
   "cube",
   "sphere",
   "cylinder",
   "plane",
-  // composed objects
+  "cone",
+  "torus",
+  "prism",
+]);
+export type PrimitiveType = z.infer<typeof PrimitiveTypeSchema>;
+
+/**
+ * Supported object types (closed set = capability manifest seed).
+ * - Primitives: cube, sphere, cylinder, plane, cone, torus, prism.
+ * - `group`: an AI-composed collection of primitive children (arbitrary novel objects).
+ * - Seeded composed objects: recognizable pre-built objects made of primitives.
+ */
+export const ObjectTypeSchema = z.enum([
+  // primitives
+  "cube",
+  "sphere",
+  "cylinder",
+  "plane",
+  "cone",
+  "torus",
+  "prism",
+  // free composition
+  "group",
+  // seeded composed objects
   "chair",
   "desk",
   "table",
   "monitor",
   "pc",
   "lamp",
+  "plant",
+  "bookshelf",
+  "sofa",
+  "bed",
+  "rug",
+  "window",
+  "door",
+  "mug",
+  "bottle",
+  "stool",
+  "streetlight",
 ]);
 export type ObjectType = z.infer<typeof ObjectTypeSchema>;
 
@@ -69,20 +102,57 @@ export const MaterialSchema = z.object({
 });
 export type Material = z.infer<typeof MaterialSchema>;
 
-/** A single entity in the world. */
-export const SceneObjectSchema = z.object({
-  /** Stable, human-readable, unique id, e.g. "chair_01". */
-  id: z.string().min(1),
-  type: ObjectTypeSchema,
-  /** Display name; may differ from id. */
-  name: z.string().min(1),
-  transform: TransformSchema,
-  /** Base dimensions `[width, height, depth]` in scene units before scale. */
+/**
+ * A child sub-shape inside a `group`. Children may only be PRIMITIVES, positioned in the
+ * group's local space. This is how the AI builds novel objects (a plant, a sign, a lamp
+ * post) out of known parts while the compiler stays deterministic.
+ */
+export const GroupChildSchema = z.object({
+  type: PrimitiveTypeSchema,
+  /** Local position relative to the group origin. */
+  position: Vec3Schema,
+  /** Local rotation (Euler radians). */
+  rotation: Vec3Schema.default([0, 0, 0]),
+  /** Size `[width, height, depth]`. */
   dimensions: Vec3Schema,
   material: MaterialSchema,
-  /** Optional parent object id, for grouping/relationships. */
-  parentId: z.string().min(1).optional(),
 });
+export type GroupChild = z.infer<typeof GroupChildSchema>;
+
+/** A single entity in the world. */
+export const SceneObjectSchema = z
+  .object({
+    /** Stable, human-readable, unique id, e.g. "chair_01". */
+    id: z.string().min(1),
+    type: ObjectTypeSchema,
+    /** Display name; may differ from id. */
+    name: z.string().min(1),
+    transform: TransformSchema,
+    /** Base dimensions `[width, height, depth]` in scene units before scale. */
+    dimensions: Vec3Schema,
+    material: MaterialSchema,
+    /** Optional parent object id, for grouping/relationships. */
+    parentId: z.string().min(1).optional(),
+    /** Present only for `group` objects: the primitive children to assemble. */
+    children: z.array(GroupChildSchema).optional(),
+  })
+  .superRefine((obj, ctx) => {
+    if (obj.type === "group") {
+      if (!obj.children || obj.children.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "a group must have a non-empty children array",
+          path: ["children"],
+        });
+      }
+    } else if (obj.children !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "only group objects may have children",
+        path: ["children"],
+      });
+    }
+  });
 export type SceneObject = z.infer<typeof SceneObjectSchema>;
 
 /** Supported light types. */
@@ -140,3 +210,9 @@ export type Scene = z.infer<typeof SceneSchema>;
 export const OBJECT_TYPES = ObjectTypeSchema.options;
 /** Convenience: list of all supported light types. */
 export const LIGHT_TYPES = LightTypeSchema.options;
+/** The primitive subset (also the only types a group's children may use). */
+export const PRIMITIVE_TYPES = PrimitiveTypeSchema.options;
+/** Composed/seeded object types = everything that is not a primitive and not `group`. */
+export const COMPOSED_TYPES = OBJECT_TYPES.filter(
+  (t) => t !== "group" && !PRIMITIVE_TYPES.includes(t as PrimitiveType),
+) as Exclude<ObjectType, PrimitiveType | "group">[];

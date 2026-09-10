@@ -5,6 +5,9 @@ import {
   sphereRadius,
   cylinderArgs,
   planeArgs,
+  coneArgs,
+  torusArgs,
+  prismArgs,
   isPrimitive,
   PRIMITIVE_TYPES,
   COMPOSED_TYPES,
@@ -63,13 +66,38 @@ describe("geometry arg helpers", () => {
 });
 
 describe("type classification", () => {
-  it("primitive/composed lists are disjoint and cover all types", () => {
-    const union = [...PRIMITIVE_TYPES, ...COMPOSED_TYPES].sort();
+  it("primitive + composed + group cover all object types with no overlap", () => {
+    const union = [...PRIMITIVE_TYPES, ...COMPOSED_TYPES, "group"].sort();
     expect(union).toEqual([...OBJECT_TYPES].sort());
+    // disjoint primitive/composed
+    const overlap = PRIMITIVE_TYPES.filter((t) => (COMPOSED_TYPES as string[]).includes(t));
+    expect(overlap).toHaveLength(0);
   });
-  it("isPrimitive is correct", () => {
+  it("isPrimitive is correct for old and new primitives", () => {
     expect(isPrimitive("cube")).toBe(true);
+    expect(isPrimitive("cone")).toBe(true);
+    expect(isPrimitive("torus")).toBe(true);
+    expect(isPrimitive("prism")).toBe(true);
     expect(isPrimitive("desk")).toBe(false);
+    expect(isPrimitive("group")).toBe(false);
+  });
+});
+
+describe("new primitive arg helpers", () => {
+  it("coneArgs returns [radius, height, segments]", () => {
+    const [r, hgt, seg] = coneArgs([2, 3, 2]);
+    expect(r).toBe(1);
+    expect(hgt).toBe(3);
+    expect(seg).toBeGreaterThan(0);
+  });
+  it("torusArgs returns positive radius and tube", () => {
+    const [r, tube] = torusArgs([2, 0.4, 2]);
+    expect(r).toBeGreaterThan(0);
+    expect(tube).toBeGreaterThan(0);
+  });
+  it("prismArgs uses 3 radial segments", () => {
+    const [, , seg] = prismArgs([1, 2, 1]);
+    expect(seg).toBe(3);
   });
 });
 

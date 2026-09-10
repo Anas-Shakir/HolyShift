@@ -133,6 +133,34 @@ describe("applyPatch — environment / lights", () => {
   });
 });
 
+describe("applyPatch — group composition", () => {
+  it("creates a group from AI children (partial material filled in)", () => {
+    const patch = parse({
+      operations: [
+        {
+          op: "create",
+          object: {
+            type: "group",
+            name: "Potted Plant",
+            children: [
+              { type: "cylinder", position: [0, 0.15, 0], dimensions: [0.3, 0.3, 0.3], material: { color: "#8b5a2b" } },
+              { type: "sphere", position: [0, 0.6, 0], dimensions: [0.5, 0.5, 0.5], material: { color: "#3f7d3a" } },
+            ],
+          },
+        },
+      ],
+    });
+    const { scene, errors } = applyPatch(createEmptyScene(), patch);
+    expect(errors).toHaveLength(0);
+    const group = byType(scene, "group")[0];
+    expect(group).toBeTruthy();
+    expect(group.children).toHaveLength(2);
+    // partial material was completed to a full material
+    expect(group.children?.[0].material.roughness).toBeGreaterThanOrEqual(0);
+    expect(group.children?.[0].material.color).toBe("#8b5a2b");
+  });
+});
+
 describe("applyPatch — clarification", () => {
   it("passes clarification through and makes no changes", () => {
     const patch = parse({ operations: [], clarification: "Which monitor do you mean?" });

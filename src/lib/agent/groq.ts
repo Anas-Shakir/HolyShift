@@ -1,6 +1,5 @@
 import "server-only";
 import { ScenePatchSchema, type ScenePatch } from "./patch";
-import { SCENE_PATCH_JSON_SCHEMA, SCENE_PATCH_SCHEMA_NAME } from "./patchSchema";
 import { buildSystemPrompt, repairNote } from "./prompt";
 import type { Scene } from "@/lib/scene/schema";
 
@@ -36,12 +35,22 @@ function normalizeTarget(raw: unknown): unknown {
   return {};
 }
 
-/** Narrow a raw create/update field bundle, dropping nulls (incl. nested material). */
+/** Narrow a raw create/update field bundle, dropping nulls (incl. nested material/children). */
 function normalizeFields(raw: unknown): Record<string, unknown> {
   if (!raw || typeof raw !== "object") return {};
   const cleaned = dropNulls(raw as Record<string, unknown>);
   if (cleaned.material && typeof cleaned.material === "object") {
     cleaned.material = dropNulls(cleaned.material as Record<string, unknown>);
+  }
+  if (Array.isArray(cleaned.children)) {
+    cleaned.children = cleaned.children.map((child) => {
+      if (!child || typeof child !== "object") return child;
+      const c = dropNulls(child as Record<string, unknown>);
+      if (c.material && typeof c.material === "object") {
+        c.material = dropNulls(c.material as Record<string, unknown>);
+      }
+      return c;
+    });
   }
   return cleaned;
 }
@@ -99,14 +108,11 @@ async function callGroq(apiKey: string, model: string, messages: GroqMessage[]):
       model,
       messages,
       temperature: 0.2,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: SCENE_PATCH_SCHEMA_NAME,
-          strict: true,
-          schema: SCENE_PATCH_JSON_SCHEMA,
-        },
-      },
+      // JSON Object Mode: the model must return a valid JSON object. We validate the shape
+      // with Zod (+ normalizePatch + a repair retry). Strict json_schema mode was too
+      // constraining for the expanded patch (nested anyOf/arrays), so we describe the shape
+      // in the prompt instead. This is the robust path for a large output contract.
+      response_format: { type: "json_object" },
     }),
   });
 

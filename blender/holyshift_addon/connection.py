@@ -79,14 +79,15 @@ def _drain():
                 "error": "sync message had no scene",
             }
             _last_result = result.get("summary") or result.get("error") or ""
-            _client.send(
-                {
-                    "type": "sync_result",
-                    "ok": bool(result.get("ok")),
-                    "summary": result.get("summary"),
-                    "error": result.get("error"),
-                }
-            )
+            payload = {
+                "type": "sync_result",
+                "ok": bool(result.get("ok")),
+                "summary": result.get("summary"),
+                "error": result.get("error"),
+            }
+            # Retry once if the first send fails (connection may be mid-refresh).
+            if not _client.send(payload):
+                _client.send(payload)
     return 0.2  # poll again in 200ms
 
 

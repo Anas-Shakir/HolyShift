@@ -54,13 +54,31 @@ export function planeArgs(dimensions: Vec3): [number, number, number] {
   return [dimensions[0], thickness, dimensions[2]];
 }
 
-/** The four core primitive types. */
-export const PRIMITIVE_TYPES: ObjectType[] = ["cube", "sphere", "cylinder", "plane"];
+/** Cone args `[radius, height, radialSegments]`. */
+export function coneArgs(dimensions: Vec3): [number, number, number] {
+  const radius = Math.max(dimensions[0], dimensions[2]) / 2;
+  return [radius, dimensions[1], 24];
+}
 
-/** The composed types (rendered as grouped primitives). */
-export const COMPOSED_TYPES: ObjectType[] = ["chair", "desk", "table", "monitor", "pc", "lamp"];
+/** Torus args `[radius, tube, radialSegments, tubularSegments]`. */
+export function torusArgs(dimensions: Vec3): [number, number, number, number] {
+  const radius = Math.max(dimensions[0], dimensions[2]) / 2;
+  // tube (minor radius) scales with the object's height so it reads as a ring.
+  const tube = Math.max(dimensions[1] / 2, radius * 0.25);
+  return [radius, tube, 16, 32];
+}
 
-/** True if the type is a core primitive (single mesh). */
+/** Prism (triangular) rendered as a 3-sided cylinder: `[radius, height, radialSegments]`. */
+export function prismArgs(dimensions: Vec3): [number, number, number] {
+  const radius = Math.max(dimensions[0], dimensions[2]) / 2;
+  return [radius, dimensions[1], 3];
+}
+
+/** Re-export the canonical type lists (schema is the source of truth). */
+export { PRIMITIVE_TYPES, COMPOSED_TYPES } from "@/lib/scene/schema";
+import { PRIMITIVE_TYPES as _PRIMS } from "@/lib/scene/schema";
+
+/** True if the type is a primitive (single mesh). */
 export function isPrimitive(type: ObjectType): boolean {
-  return PRIMITIVE_TYPES.includes(type);
+  return (_PRIMS as readonly string[]).includes(type);
 }

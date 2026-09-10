@@ -169,15 +169,17 @@ export function useBlenderSync(): BlenderSyncState {
     setSyncMessage(null);
     ws.send(serializeMessage({ type: "sync", scene }));
 
-    // Fail gracefully if Blender never responds (drop, sleep, or compile hang).
+    // Safety net: if no result arrives in a generous window, stop showing "syncing".
+    // A late sync_result (relay/compile latency, cold free-tier relay) still overrides this,
+    // so we word it softly rather than as a hard failure.
     clearSyncTimeout();
     syncTimeout.current = setTimeout(() => {
       if (pendingSync.current) {
         pendingSync.current = false;
-        setSyncStatus("failed");
-        setSyncMessage("No response from Blender (timed out). Check the add-on is connected.");
+        setSyncStatus("idle");
+        setSyncMessage("Sync sent. If Blender didn't update, check the add-on is connected.");
       }
-    }, 20000);
+    }, 45000);
   }, []);
 
   // Clean up the socket on unmount.
