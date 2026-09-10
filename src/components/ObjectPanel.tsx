@@ -3,6 +3,7 @@
 import { useSceneStore } from "@/store/sceneStore";
 import { OBJECT_TYPES } from "@/lib/scene/schema";
 import { TransformFields } from "./TransformFields";
+import { VerifyPanel } from "./VerifyPanel";
 
 /**
  * ObjectPanel — lists the objects in the current scene from the Zustand store,
@@ -80,6 +81,8 @@ export function ObjectPanel() {
       )}
 
       <TransformFields />
+
+      <VerifyPanel />
 
       <div className="border-t border-edge p-3">
         <label

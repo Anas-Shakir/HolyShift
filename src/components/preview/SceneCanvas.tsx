@@ -5,10 +5,22 @@ import type { Group } from "three";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Grid, PerspectiveCamera, TransformControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { useThree } from "@react-three/fiber";
 import { useSceneStore } from "@/store/sceneStore";
 import { SceneObjectView } from "./SceneObjectView";
 import { Lights } from "./Lights";
 import { readTransform } from "./transformCommit";
+import { registerCanvas } from "./canvasCapture";
+
+/** Registers the WebGL canvas element so VerifyPanel can snapshot it (vision tier). */
+function CanvasRegistrar() {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    registerCanvas(gl.domElement);
+    return () => registerCanvas(null);
+  }, [gl]);
+  return null;
+}
 
 export type GizmoMode = "translate" | "rotate" | "scale";
 
@@ -46,7 +58,13 @@ export function SceneCanvas({ gizmoMode = "translate" }: { gizmoMode?: GizmoMode
   }, [selectedId]);
 
   return (
-    <Canvas shadows dpr={[1, 2]} onPointerMissed={() => deselect()}>
+    <Canvas
+      shadows
+      dpr={[1, 2]}
+      gl={{ preserveDrawingBuffer: true }}
+      onPointerMissed={() => deselect()}
+    >
+      <CanvasRegistrar />
       <color attach="background" args={[environment.backgroundColor]} />
 
       <PerspectiveCamera makeDefault position={camera.position} fov={camera.fov} />

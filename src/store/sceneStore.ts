@@ -12,6 +12,9 @@ import { createEmptyScene } from "@/lib/scene/factory";
 import { loadFromStorage, saveToStorage } from "@/lib/scene/serialize";
 import { applyPatch } from "@/lib/agent/apply";
 import type { ScenePatch } from "@/lib/agent/patch";
+import { verifyGeometry } from "@/lib/verify/geometry";
+import { applyFix as applyFixOp, applyFixes as applyFixesOp } from "@/lib/verify/fixes";
+import type { Issue } from "@/lib/verify/types";
 import {
   addObject,
   updateObject,
@@ -39,10 +42,21 @@ export interface SceneState {
   error: string | null;
   /** Currently selected object id (for direct manipulation), or null. */
   selectedId: string | null;
+  /** Verification issues from the last verifyScene() run. */
+  issues: Issue[];
+  /** True once verifyScene() has been run (to distinguish "no issues" from "not run"). */
+  verified: boolean;
 
   // selection actions
   select: (id: string) => void;
   deselect: () => void;
+
+  // verification actions
+  verifyScene: () => Issue[];
+  applyFix: (key: string) => void;
+  applyFixAll: () => void;
+  /** Merge additional issues (e.g. from the vision tier) into the current list. */
+  addIssues: (extra: Issue[]) => void;
 
   // actions
   addObject: (type: ObjectType, overrides?: Partial<Omit<SceneObject, "id" | "type">>) => void;
@@ -83,9 +97,42 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   status: "idle",
   error: null,
   selectedId: null,
+  issues: [],
+  verified: false,
 
   select: (id) => set({ selectedId: id }),
   deselect: () => set({ selectedId: null }),
+
+  verifyScene: () => {
+    const found = verifyGeometry(get().scene);
+    set({ issues: found, verified: true });
+    return found;
+  },
+
+  applyFix: (key) => {
+    const issue = get().issues.find((i) => i.key === key);
+    if (!issue) return;
+    try {
+      const next = applyFixOp(get().scene, issue);
+      // Re-verify so the issue list reflects the corrected scene.
+      set({ scene: next, issues: verifyGeometry(next), status: "idle", error: null });
+    } catch (err) {
+      set({ status: "error", error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  applyFixAll: () => {
+    const next = applyFixesOp(get().scene, get().issues);
+    set({ scene: next, issues: verifyGeometry(next), status: "idle", error: null });
+  },
+
+  addIssues: (extra) => {
+    // Merge, de-duplicating by key (vision issues use "semantic:*" keys).
+    const existing = get().issues;
+    const seen = new Set(existing.map((i) => i.key));
+    const merged = [...existing, ...extra.filter((i) => !seen.has(i.key))];
+    set({ issues: merged, verified: true });
+  },
 
   addObject: (type, overrides) => runOp(get, set, (s) => addObject(s, type, overrides)),
   updateObject: (id, patch) => runOp(get, set, (s) => updateObject(s, id, patch)),

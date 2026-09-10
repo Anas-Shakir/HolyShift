@@ -3,7 +3,14 @@ import { useSceneStore } from "./sceneStore";
 import { createEmptyScene } from "@/lib/scene/factory";
 
 function reset() {
-  useSceneStore.setState({ scene: createEmptyScene(), status: "idle", error: null, selectedId: null });
+  useSceneStore.setState({
+    scene: createEmptyScene(),
+    status: "idle",
+    error: null,
+    selectedId: null,
+    issues: [],
+    verified: false,
+  });
 }
 
 describe("sceneStore", () => {
@@ -109,5 +116,33 @@ describe("sceneStore", () => {
       operations: [{ op: "delete", target: { id } }],
     });
     expect(useSceneStore.getState().selectedId).toBeNull();
+  });
+
+  it("verifyScene finds a floating object and applyFix clears it", () => {
+    useSceneStore.getState().addObject("cube");
+    const id = useSceneStore.getState().scene.objects[0].id;
+    useSceneStore.getState().updateObject(id, { transform: { position: [0, 5, 0] } });
+
+    const found = useSceneStore.getState().verifyScene();
+    expect(useSceneStore.getState().verified).toBe(true);
+    const floating = found.find((i) => i.kind === "floating");
+    expect(floating).toBeTruthy();
+
+    useSceneStore.getState().applyFix(floating!.key);
+    // re-verified list no longer has that floating issue
+    expect(useSceneStore.getState().issues.find((i) => i.kind === "floating")).toBeFalsy();
+  });
+
+  it("applyFixAll resolves all fixable issues", () => {
+    useSceneStore.getState().addObject("cube");
+    useSceneStore.getState().updateObject(useSceneStore.getState().scene.objects[0].id, {
+      transform: { position: [0, 5, 0] },
+    });
+    useSceneStore.getState().verifyScene();
+    useSceneStore.getState().applyFixAll();
+    const remaining = useSceneStore.getState().issues.filter(
+      (i) => i.kind === "floating" || i.kind === "below_floor" || i.kind === "bad_scale",
+    );
+    expect(remaining).toHaveLength(0);
   });
 });
