@@ -7,10 +7,12 @@ import { BlenderSyncProvider } from "./BlenderSyncProvider";
 import { BlenderConnect } from "./BlenderConnect";
 
 /**
- * WorkspaceLayout — the three-region workspace shell:
- *   - PreviewPanel (top): 3D preview area
- *   - ObjectPanel (bottom-left): scene/object list
- *   - CommandBar (bottom-right): AI command input
+ * WorkspaceLayout — three full-height columns under the header:
+ *   - Left sidebar: Scene panel (object list + transform inspector)
+ *   - Center: 3D preview (fills remaining space)
+ *   - Right sidebar: AI command + JSON inspector
+ *
+ * Side panels scroll independently so the inspector and dev state are always reachable.
  */
 export function WorkspaceLayout() {
   return (
@@ -30,14 +32,18 @@ export function WorkspaceLayout() {
           </div>
         </header>
 
-        <PreviewPanel />
-
-        <div className="flex h-72 shrink-0">
+        <div className="flex min-h-0 flex-1">
+          {/* Left sidebar: scene objects + transform inspector */}
           <ObjectPanel />
-          <div className="flex flex-1 flex-col">
+
+          {/* Center: 3D preview */}
+          <PreviewPanel />
+
+          {/* Right sidebar: AI command (top) + JSON inspector (bottom) */}
+          <aside className="flex w-80 shrink-0 flex-col border-l border-edge">
             <CommandBar />
             <JsonInspector />
-          </div>
+          </aside>
         </div>
       </main>
     </BlenderSyncProvider>

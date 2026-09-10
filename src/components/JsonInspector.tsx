@@ -49,9 +49,9 @@ export function JsonInspector() {
     <section
       aria-label="JSON inspector"
       data-testid="json-inspector"
-      className="flex flex-col border-t border-edge bg-panel"
+      className="flex min-h-0 flex-1 flex-col border-t border-edge bg-panel"
     >
-      <header className="flex items-center justify-between border-b border-edge px-4 py-2">
+      <header className="flex shrink-0 items-center justify-between border-b border-edge px-4 py-2">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
           State (dev)
         </h2>
@@ -86,7 +86,7 @@ export function JsonInspector() {
           setDraft(e.target.value);
           setDirty(true);
         }}
-        className="h-40 w-full resize-none bg-[#0b0d12] p-3 font-mono text-[11px] leading-relaxed text-neutral-300 focus:outline-none"
+        className="w-full flex-1 resize-none bg-[#0b0d12] p-3 font-mono text-[11px] leading-relaxed text-neutral-300 focus:outline-none"
       />
 
       {shownError && (

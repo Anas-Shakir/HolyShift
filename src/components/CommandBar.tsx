@@ -75,7 +75,7 @@ export function CommandBar() {
     <section
       aria-label="AI command"
       data-testid="command-bar"
-      className="flex flex-1 flex-col bg-panel"
+      className="flex shrink-0 flex-col bg-panel"
     >
       <header className="border-b border-edge px-4 py-3">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
