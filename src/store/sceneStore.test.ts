@@ -3,7 +3,7 @@ import { useSceneStore } from "./sceneStore";
 import { createEmptyScene } from "@/lib/scene/factory";
 
 function reset() {
-  useSceneStore.setState({ scene: createEmptyScene(), status: "idle", error: null });
+  useSceneStore.setState({ scene: createEmptyScene(), status: "idle", error: null, selectedId: null });
 }
 
 describe("sceneStore", () => {
@@ -82,5 +82,32 @@ describe("sceneStore", () => {
     });
     expect(result.clarification).toBe("Which monitor?");
     expect(useSceneStore.getState().scene).toEqual(before);
+  });
+
+  it("select / deselect update selectedId", () => {
+    useSceneStore.getState().addObject("cube");
+    const id = useSceneStore.getState().scene.objects[0].id;
+    useSceneStore.getState().select(id);
+    expect(useSceneStore.getState().selectedId).toBe(id);
+    useSceneStore.getState().deselect();
+    expect(useSceneStore.getState().selectedId).toBeNull();
+  });
+
+  it("removing the selected object clears the selection", () => {
+    useSceneStore.getState().addObject("cube");
+    const id = useSceneStore.getState().scene.objects[0].id;
+    useSceneStore.getState().select(id);
+    useSceneStore.getState().removeObject(id);
+    expect(useSceneStore.getState().selectedId).toBeNull();
+  });
+
+  it("agent patch that deletes the selected object clears the selection", () => {
+    useSceneStore.getState().addObject("cube");
+    const id = useSceneStore.getState().scene.objects[0].id;
+    useSceneStore.getState().select(id);
+    useSceneStore.getState().applyAgentPatch({
+      operations: [{ op: "delete", target: { id } }],
+    });
+    expect(useSceneStore.getState().selectedId).toBeNull();
   });
 });

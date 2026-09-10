@@ -1,6 +1,7 @@
 "use client";
 
-import type { ComponentType } from "react";
+import { useEffect, useRef, type ComponentType } from "react";
+import type { Group } from "three";
 import type { ObjectType, SceneObject } from "@/lib/scene/schema";
 import {
   CubeMesh,
@@ -80,13 +81,59 @@ function FallbackMesh({ object }: { object: SceneObject }) {
 /**
  * Renders one scene object: applies the object transform to a group, then dispatches to
  * the type-specific renderer.
+ *
+ * - Clicking the object selects it (stopPropagation so it doesn't reach the canvas
+ *   background deselect handler).
+ * - When selected, a subtle emissive highlight is layered via the `selected` flag, and the
+ *   group is registered through `onSelectedRef` so the TransformControls gizmo can attach.
  */
-export function SceneObjectView({ object }: { object: SceneObject }) {
+export function SceneObjectView({
+  object,
+  selected = false,
+  onSelect,
+  onSelectedRef,
+}: {
+  object: SceneObject;
+  selected?: boolean;
+  onSelect?: (id: string) => void;
+  onSelectedRef?: (group: Group | null) => void;
+}) {
   const Renderer = RENDERERS[object.type] ?? FallbackMesh;
   const { position, rotation, scale } = object.transform;
+  const groupRef = useRef<Group>(null);
+
+  // When this object is the selected one, hand its group to the gizmo; clear on deselect.
+  useEffect(() => {
+    if (selected) onSelectedRef?.(groupRef.current);
+    return () => {
+      if (selected) onSelectedRef?.(null);
+    };
+  }, [selected, onSelectedRef]);
+
   return (
-    <group position={position} rotation={rotation} scale={scale}>
+    <group
+      ref={groupRef}
+      position={position}
+      rotation={rotation}
+      scale={scale}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect?.(object.id);
+      }}
+    >
       <Renderer object={object} />
+      {selected && <SelectionHighlight object={object} />}
     </group>
+  );
+}
+
+/** A translucent bounding box highlight around the selected object. */
+function SelectionHighlight({ object }: { object: SceneObject }) {
+  const [w, h, d] = object.dimensions;
+  return (
+    <mesh>
+      <boxGeometry args={[w * 1.08, h * 1.08, d * 1.08]} />
+      <meshBasicMaterial color="#7c5cff" wireframe transparent opacity={0.6} />
+    </mesh>
   );
 }

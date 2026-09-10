@@ -2,6 +2,7 @@
 
 import { useSceneStore } from "@/store/sceneStore";
 import { OBJECT_TYPES } from "@/lib/scene/schema";
+import { TransformFields } from "./TransformFields";
 
 /**
  * ObjectPanel — lists the objects in the current scene from the Zustand store,
@@ -12,6 +13,8 @@ export function ObjectPanel() {
   const addObject = useSceneStore((s) => s.addObject);
   const removeObject = useSceneStore((s) => s.removeObject);
   const error = useSceneStore((s) => s.error);
+  const selectedId = useSceneStore((s) => s.selectedId);
+  const select = useSceneStore((s) => s.select);
 
   return (
     <section
@@ -30,26 +33,38 @@ export function ObjectPanel() {
           <p className="text-xs text-neutral-600">No objects yet.</p>
         ) : (
           <ul className="space-y-1">
-            {objects.map((o) => (
-              <li
-                key={o.id}
-                data-testid={`object-item-${o.id}`}
-                className="group flex items-center justify-between rounded px-2 py-1.5 text-sm text-neutral-200 hover:bg-panel-alt"
-              >
-                <span className="truncate">
-                  {o.name}
-                  <span className="ml-2 text-[10px] text-neutral-500">{o.id}</span>
-                </span>
-                <button
-                  type="button"
-                  aria-label={`Remove ${o.name}`}
-                  onClick={() => removeObject(o.id)}
-                  className="ml-2 shrink-0 text-neutral-600 opacity-0 hover:text-red-400 group-hover:opacity-100"
+            {objects.map((o) => {
+              const isSelected = o.id === selectedId;
+              return (
+                <li
+                  key={o.id}
+                  data-testid={`object-item-${o.id}`}
+                  data-selected={isSelected ? "true" : "false"}
+                  onClick={() => select(o.id)}
+                  className={`group flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-sm ${
+                    isSelected
+                      ? "bg-accent/20 text-white ring-1 ring-accent"
+                      : "text-neutral-200 hover:bg-panel-alt"
+                  }`}
                 >
-                  ✕
-                </button>
-              </li>
-            ))}
+                  <span className="truncate">
+                    {o.name}
+                    <span className="ml-2 text-[10px] text-neutral-500">{o.id}</span>
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${o.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeObject(o.id);
+                    }}
+                    className="ml-2 shrink-0 text-neutral-600 opacity-0 hover:text-red-400 group-hover:opacity-100"
+                  >
+                    ✕
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -63,6 +78,8 @@ export function ObjectPanel() {
           {error}
         </div>
       )}
+
+      <TransformFields />
 
       <div className="border-t border-edge p-3">
         <label

@@ -37,6 +37,12 @@ export interface SceneState {
   scene: Scene;
   status: SceneStatus;
   error: string | null;
+  /** Currently selected object id (for direct manipulation), or null. */
+  selectedId: string | null;
+
+  // selection actions
+  select: (id: string) => void;
+  deselect: () => void;
 
   // actions
   addObject: (type: ObjectType, overrides?: Partial<Omit<SceneObject, "id" | "type">>) => void;
@@ -76,10 +82,18 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   scene: createEmptyScene(),
   status: "idle",
   error: null,
+  selectedId: null,
+
+  select: (id) => set({ selectedId: id }),
+  deselect: () => set({ selectedId: null }),
 
   addObject: (type, overrides) => runOp(get, set, (s) => addObject(s, type, overrides)),
   updateObject: (id, patch) => runOp(get, set, (s) => updateObject(s, id, patch)),
-  removeObject: (id) => runOp(get, set, (s) => removeObject(s, id)),
+  removeObject: (id) => {
+    runOp(get, set, (s) => removeObject(s, id));
+    // Clear selection if we just removed the selected object.
+    if (get().selectedId === id) set({ selectedId: null });
+  },
   updateEnvironment: (patch) => runOp(get, set, (s) => updateEnvironment(s, patch)),
   updateCamera: (patch) => runOp(get, set, (s) => updateCamera(s, patch)),
   updateLights: (lights) => runOp(get, set, (s) => updateLights(s, lights)),
@@ -88,15 +102,18 @@ export const useSceneStore = create<SceneState>((set, get) => ({
 
   applyAgentPatch: (patch) => {
     const result = applyPatch(get().scene, patch);
+    // Clear selection if the selected object no longer exists after the patch.
+    const stillExists = result.scene.objects.some((o) => o.id === get().selectedId);
     set({
       scene: result.scene,
       status: result.errors.length > 0 ? "error" : "idle",
       error: result.errors.length > 0 ? result.errors.join("; ") : null,
+      ...(stillExists ? {} : { selectedId: null }),
     });
     return { applied: result.applied, errors: result.errors, clarification: result.clarification };
   },
 
-  resetScene: () => set({ scene: createEmptyScene(), status: "idle", error: null }),
+  resetScene: () => set({ scene: createEmptyScene(), status: "idle", error: null, selectedId: null }),
   clearError: () => set({ status: "idle", error: null }),
 }));
 

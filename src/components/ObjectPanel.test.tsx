@@ -7,7 +7,7 @@ import { useSceneStore } from "@/store/sceneStore";
 import { createEmptyScene } from "@/lib/scene/factory";
 
 beforeEach(() => {
-  useSceneStore.setState({ scene: createEmptyScene(), status: "idle", error: null });
+  useSceneStore.setState({ scene: createEmptyScene(), status: "idle", error: null, selectedId: null });
 });
 
 describe("ObjectPanel", () => {
@@ -30,6 +30,22 @@ describe("ObjectPanel", () => {
     expect(screen.getByTestId("object-item-chair_01")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /remove chair/i }));
     expect(screen.queryByTestId("object-item-chair_01")).not.toBeInTheDocument();
+  });
+
+  it("clicking a row selects the object in the store", async () => {
+    const user = userEvent.setup();
+    useSceneStore.getState().addObject("desk");
+    render(<ObjectPanel />);
+    await user.click(screen.getByTestId("object-item-desk_01"));
+    expect(useSceneStore.getState().selectedId).toBe("desk_01");
+    expect(screen.getByTestId("object-item-desk_01")).toHaveAttribute("data-selected", "true");
+  });
+
+  it("reflects a selection made in the store (two-way)", () => {
+    useSceneStore.getState().addObject("desk");
+    useSceneStore.getState().select("desk_01");
+    render(<ObjectPanel />);
+    expect(screen.getByTestId("object-item-desk_01")).toHaveAttribute("data-selected", "true");
   });
 });
 
