@@ -1,12 +1,17 @@
-import type { SceneObject, Vec3 } from "@/lib/scene/schema";
+import { PRIMITIVE_TYPES, type SceneObject, type Vec3, type PrimitiveType } from "@/lib/scene/schema";
 
 /**
  * Axis-aligned bounding box (AABB) helpers for verification.
  *
- * The scene is Y-up. `transform.position` is the object's CENTER (SceneObjectView places the
- * group there), `dimensions` is [w,h,d], and `scale` multiplies dimensions. Rotation is
- * ignored for the AABB — an axis-aligned approximation, which is sufficient for the
- * placement checks here and documented as a known simplification.
+ * The scene is Y-up. `transform.position` is the object's ANCHOR; `dimensions` is [w,h,d],
+ * and `scale` multiplies dimensions. Rotation is ignored (axis-aligned approximation).
+ *
+ * IMPORTANT — vertical anchoring differs by object kind (this must match the renderers and
+ * the Blender compiler, or "fixes" push objects the wrong way):
+ *   - PRIMITIVES are CENTER-anchored: their geometry spans [py - h/2, py + h/2].
+ *   - COMPOSED objects and GROUPS are BOTTOM-anchored: every part is built from local y = 0
+ *     upward, so their geometry spans [py, py + h]. (See components/preview/composed.tsx.)
+ * X and Z are center-anchored for all kinds.
  */
 
 export interface AABB {
@@ -16,19 +21,34 @@ export interface AABB {
   halfExtents: Vec3;
 }
 
-/** Compute the world AABB of an object from its center position, dimensions, and scale. */
+const PRIMITIVE_SET = new Set<PrimitiveType>(PRIMITIVE_TYPES);
+
+/** True if the object's geometry is built bottom-up from local y=0 (composed / group). */
+export function isBottomAnchored(object: SceneObject): boolean {
+  return !PRIMITIVE_SET.has(object.type as PrimitiveType);
+}
+
+/** Compute the world AABB of an object, honoring its vertical anchor. */
 export function aabb(object: SceneObject): AABB {
   const [px, py, pz] = object.transform.position;
   const [dx, dy, dz] = object.dimensions;
   const [sx, sy, sz] = object.transform.scale;
   const hx = Math.abs(dx * sx) / 2;
-  const hy = Math.abs(dy * sy) / 2;
+  const hyFull = Math.abs(dy * sy); // full height
+  const hy = hyFull / 2;
   const hz = Math.abs(dz * sz) / 2;
+
+  // Vertical span depends on anchoring.
+  const bottomAnchored = isBottomAnchored(object);
+  const minY = bottomAnchored ? py : py - hy;
+  const maxY = bottomAnchored ? py + hyFull : py + hy;
+  const centerY = (minY + maxY) / 2;
+
   return {
-    center: [px, py, pz],
+    center: [px, centerY, pz],
     halfExtents: [hx, hy, hz],
-    min: [px - hx, py - hy, pz - hz],
-    max: [px + hx, py + hy, pz + hz],
+    min: [px - hx, minY, pz - hz],
+    max: [px + hx, maxY, pz + hz],
   };
 }
 

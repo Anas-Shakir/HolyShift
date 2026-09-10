@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { aabb, overlaps, footprintOverlaps } from "./boxes";
+import { aabb, overlaps, footprintOverlaps, isBottomAnchored } from "./boxes";
 import { verifyGeometry } from "./geometry";
 import { createEmptyScene } from "@/lib/scene/factory";
 import { addObject, updateObject } from "@/lib/scene/operations";
@@ -106,5 +106,44 @@ describe("verifyGeometry", () => {
     s = addObject(s, "plane"); // thin, at origin
     s = updateObject(s, s.objects[0].id, { transform: { position: [0, 0, 0] } });
     expect(verifyGeometry(s).find((i) => i.kind === "floating")).toBeFalsy();
+  });
+
+  // --- anchoring: composed objects are BOTTOM-anchored (base at position.y) ---
+
+  it("does NOT flag a composed object sitting at y=0 (base on floor)", () => {
+    let s = createEmptyScene();
+    s = addObject(s, "desk"); // default position [0,0,0] -> base at 0 (bottom-anchored)
+    const issues = verifyGeometry(s);
+    expect(issues.find((i) => i.kind === "below_floor")).toBeFalsy();
+    expect(issues.find((i) => i.kind === "floating")).toBeFalsy();
+  });
+
+  it("flags a composed object raised above the floor and drops it back to y=0", () => {
+    let s = createEmptyScene();
+    s = addObject(s, "desk");
+    s = updateObject(s, s.objects[0].id, { transform: { position: [0, 2, 0] } }); // base at 2
+    const floating = verifyGeometry(s).find((i) => i.kind === "floating");
+    expect(floating).toBeTruthy();
+    // fix should bring the base (position.y for bottom-anchored) back to the floor => y = 0
+    expect(floating!.fix!.patch.transform!.position![1]).toBeCloseTo(0);
+  });
+
+  it("flags a composed object pushed below the floor and lifts it to y=0", () => {
+    let s = createEmptyScene();
+    s = addObject(s, "chair");
+    s = updateObject(s, s.objects[0].id, { transform: { position: [0, -1, 0] } }); // base at -1
+    const below = verifyGeometry(s).find((i) => i.kind === "below_floor");
+    expect(below).toBeTruthy();
+    expect(below!.fix!.patch.transform!.position![1]).toBeCloseTo(0);
+  });
+
+  it("isBottomAnchored: primitives center-anchored, composed/group bottom-anchored", () => {
+    let s = createEmptyScene();
+    s = addObject(s, "cube");
+    s = addObject(s, "desk");
+    s = addObject(s, "group");
+    expect(isBottomAnchored(s.objects[0])).toBe(false); // cube (primitive)
+    expect(isBottomAnchored(s.objects[1])).toBe(true); // desk (composed)
+    expect(isBottomAnchored(s.objects[2])).toBe(true); // group
   });
 });
